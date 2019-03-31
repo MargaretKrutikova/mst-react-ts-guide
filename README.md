@@ -49,8 +49,8 @@ Now we need to identify base properties of the domain object `poll`:
 
 The code for the models:
 
-```
-import { types } from "mobx-state-tree";
+```javascript
+import { types } from "mobx-state-tree"
 
 const PollChoiceBase = types.model("PollChoiceBase", {
   value: types.string
@@ -61,14 +61,13 @@ const PollBase = types.model("PollBase", {
   isMultiChoice: false,
   choices: types.optional(types.array(PollChoiceBase), [])
 })
-
 ```
 
 ### Use composition to create domain stores
 
 A poll that is being edited (let's call it a draft poll) and not yet published will have the same properties as `PollBase`, but also actions allowing to edit those properties. Similar, a choice of the draft poll will have the same shape as `PollChoiceBase` but also an action to update it:
 
-```
+```javascript
 const PollDraftChoice = PollChoiceBase.actions(self => ({
   setChoice(choice: string) {
     self.value = choice
@@ -92,13 +91,13 @@ const PollDraft = types
 
 A published poll can no longer be edited, so it won't have editing actions but it needs an extra property `id` to be able to find it or link to it by its id:
 
-```
-const PublishedPoll = types
-  .compose(PollBase,
-    types.model({
-      id: types.identifier
-    })
-  )
+```javascript
+const PublishedPoll = types.compose(
+  PollBase,
+  types.model({
+    id: types.identifier
+  })
+)
 ```
 
 ### CRUD on models in a nested list
@@ -109,7 +108,7 @@ The tricky part here is removal. Since actions can only modify the model they be
 
 Here is the code:
 
-```
+```javascript
 import { destroy, getParent, Instance, cast } from "mobx-state-tree"
 
 // Instance is a typescript helper that extracts the type of the model instance
@@ -153,7 +152,7 @@ Here is what is happening inside the choice model:
 
 Last thing, let's create our second domain store to keep track of published polls:
 
-```
+```javascript
 type PollDraftModel = Instance<typeof PollDraft>
 
 const PublishedPolls = types
@@ -175,7 +174,7 @@ Next problem is that `publishDraft` action has to be called somewhere from outsi
 
 Root store combines all the stores that are going to be used in the app: `PollDraft` and `PublishedPolls`:
 
-```
+```javascript
 type RootStoreModel = Instance<typeof RootStore>
 
 const RootStore = types.model("RootStore", {
@@ -219,14 +218,14 @@ yarn add mobx-react-lite
 
 First, create a context in `StoreProvider.ts` exporting provider and a custom hook for accessing to the context value:
 
-```
+```javascript
 import { useContext, createContext } from "react"
 import { RootStoreModel } from "./stores/RootStore"
 import { createStore } from "./stores/createStore"
 
 const rootStore = createStore()
 
-const StoreContext = createContext<RootStoreModel>(rootStore)
+const StoreContext = createContext < RootStoreModel > rootStore
 
 export const useStore = () => useContext(StoreContext)
 export const StoreProvider = StoreContext.Provider
