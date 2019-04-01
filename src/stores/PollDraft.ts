@@ -8,15 +8,11 @@ import {
 } from "mobx-state-tree"
 
 import { PollBase, PollChoiceBase } from "./PollBase"
-import { PublishedPollsModel } from "./PublishedPolls"
+import { RootStoreEnv } from "./RootStore"
 
 // Instance is a typescript helper that extracts the type of the model
 export type PollDraftChoiceModel = Instance<typeof PollDraftChoice>
 export type PollDraftModel = Instance<typeof PollDraft>
-
-export type PollDraftEnv = {
-  publishedPolls: PublishedPollsModel
-}
 
 export const PollDraftChoice = PollChoiceBase.actions(self => ({
   setChoice(choice: string) {
@@ -52,7 +48,7 @@ export const PollDraft = types
       destroy(choiceToRemove)
     },
     publish() {
-      const env = getEnv<PollDraftEnv>(self)
+      const env = getEnv<RootStoreEnv>(self)
       env.publishedPolls.publishDraft(cast(self))
     }
   }))
