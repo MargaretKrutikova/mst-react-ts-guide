@@ -10,15 +10,17 @@ The guide assumes some familiarity with `mobx-state-tree` as it doesn't go throu
 
 # Content
 
-- [Setup stores in mst]()
-  - [Create a base model]()
-  - [Use composition to create domain stores]()
-  - [CRUD on models in a nested list]()
-  - [Root store]()
-  - [Communicate between stores]()
-- [Connect react to mobx]()
-  - [Use context provider to pass store(s)]()
-  - [Create custom hook to inject stores]()
+- [Setup stores in mobx-state-tree](#setup-stores-in-mobx-state-tree)
+  - [Create a base model](#create-a-base-model)
+  - [Use composition to create domain stores](#use-composition-to-create-domain-stores)
+  - [CRUD on models in a nested list](#crud-on-models-in-a-nested-list)
+  - [Root store](#root-store)
+  - [Communicate between stores](#communicate-between-stores)
+- [Connect react to mobx](#connect-react-to-mobx)
+  - [Why not mobx-react](#why-not-mobx-react)
+  - [mobx-react-lite to the rescue](#mobx-react-lite-to-the-rescue)
+  - [Context provider to pass store](#context-provider-to-pass-store)
+  - [Custom hook to inject stores](#custom-hook-to-inject-stores)
 
 ## Setup stores in mobx-state-tree
 
@@ -208,14 +210,18 @@ const createStore = (): RootStoreModel => {
 
 The part I struggled most with is how to connect `react` to `mobx` and start using stores in my components. The idea here is that react components need to become "reactive" and start tracking observables from the stores.
 
+### Why NOT mobx-react
+
 The most common way to achieve this is by using [mobx-react](https://github.com/mobxjs/mobx-react) which provides `observer` and `inject` functions, where `observer` is wrapped around components to make them react to changes and re-render and`inject` just injects stores into components. However, I wouldn't recommend using this library because:
 
 - when using `observer`, the component loses the ability to use hooks because it gets converted to a class, more explanation can be found [here](https://github.com/mobxjs/mobx-react/issues/594). And the docs recommend in the [best practices](https://mobx.js.org/best/pitfalls.html) to use `observer` around as many components as possible, which means hooks can't be used almost anywhere,
 - `inject` function is quite compilcated and doesn't work well with typescript (see [github issue](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)), requiring all stores to be marked as optional and then using `!` to indicate that they actually exist.
 
+### mobx-react-lite to the rescue
+
 Luckily there is another library, [`mobx-react-lite`](https://github.com/mobxjs/mobx-react-lite), which is built with hooks and provides `observer` wrapper. One thing worth mentioning, its `observer` doesn't support classes, but there is a dedicated component `Observer` that can be wrapped around components in render.
 
-It is easy to get confused with this library since it provides a lot of hooks like `useObservable`, `useComputed` etc. that are going to be deprecated according to [the docs](https://github.com/mobxjs/mobx-react-lite#notice-of-deprecation). Instead here is a [recommended way](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)) that we are going to follow:
+It is easy to get confused with this library since it provides a lot of hooks like `useObservable`, `useComputed` etc. that are going to be deprecated according to [the docs](https://github.com/mobxjs/mobx-react-lite#notice-of-deprecation). Instead here is a [recommended way](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230), that we are going to follow:
 
 - use `react context` provider to pass down the store(s),
 - access the store using `useContext` hook with a selector, alternatively inject the necessary stores with a custom `useInject` hook based on the `useContext` hook,
@@ -229,7 +235,7 @@ First thing, install the library:
 yarn add mobx-react-lite
 ```
 
-### Use context provider to pass store(s)
+### Context provider to pass store
 
 First, let's create context `StoreContext`, that will later receive the root store as its `value`, and export provider and a custom hook for accessing the context value:
 
@@ -257,7 +263,7 @@ const App: React.FunctionComponent<{}> = () => (
 )
 ```
 
-### Create custom hook to inject stores
+### Custom hook to inject stores
 
 It is possible to use the `useStore` hook direclty to access the root store and get the necessary data from it, like this:
 
