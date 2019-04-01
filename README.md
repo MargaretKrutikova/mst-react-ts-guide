@@ -14,7 +14,7 @@ The guide assumes some familiarity with `mobx-state-tree` as it doesn't go throu
   - [Create a base model]()
   - [Use composition to create domain stores]()
   - [CRUD on models in a nested list]()
-  - [Create a root store]()
+  - [Root store]()
   - [Communicate between stores]()
 - [Connect react to mobx]()
   - [Use context provider to pass store(s)]()
@@ -49,7 +49,7 @@ Now we need to identify base properties of the domain object `poll`:
 
 The code for the models:
 
-```javascript
+```typescript
 import { types } from "mobx-state-tree"
 
 const PollChoiceBase = types.model("PollChoiceBase", {
@@ -67,7 +67,7 @@ const PollBase = types.model("PollBase", {
 
 A poll that is being edited (let's call it a draft poll) and not yet published will have the same properties as `PollBase`, but also actions allowing to edit those properties. Similar, a choice of the draft poll will have the same shape as `PollChoiceBase` but also an action to update it:
 
-```javascript
+```typescript
 const PollDraftChoice = PollChoiceBase.actions(self => ({
   setChoice(choice: string) {
     self.value = choice
@@ -91,7 +91,7 @@ const PollDraft = types
 
 A published poll can no longer be edited, so it won't have editing actions but it needs an extra property `id` to be able to find it or link to it by its id:
 
-```javascript
+```typescript
 const PublishedPoll = types.compose(
   PollBase,
   types.model({
@@ -108,7 +108,7 @@ The tricky part here is removal. Since actions can only modify the model they be
 
 Here is the code:
 
-```javascript
+```typescript
 import { destroy, getParent, Instance, cast } from "mobx-state-tree"
 
 // Instance is a typescript helper that extracts the type of the model instance
@@ -152,7 +152,7 @@ Here is what is happening inside the choice model:
 
 Last thing, let's create our second domain store to keep track of published polls:
 
-```javascript
+```typescript
 type PollDraftModel = Instance<typeof PollDraft>
 
 const PublishedPolls = types
@@ -170,11 +170,11 @@ Here `publishDraft` accepts a draft poll to be published, generates an id with `
 
 Next problem is that `publishDraft` action has to be called somewhere from outside, either from the `PollDraft` store or from some kind of `RootStore`. Let's see how we can make them communicate.
 
-### Create a root store
+### Root store
 
 Root store combines all the stores that are going to be used in the app: `PollDraft` and `PublishedPolls`:
 
-```javascript
+```typescript
 type RootStoreModel = Instance<typeof RootStore>
 
 const RootStore = types.model("RootStore", {
@@ -185,7 +185,36 @@ const RootStore = types.model("RootStore", {
 
 ### Communicate between stores
 
-One way of communicating between stores, is to use `getParent`. This however works fine for tightly coupled stores (like `PollDraft` and `PollDraftChoice`), but won't scale if used in more decoupled stores.
+One way of communicating between stores, is to use `getRoot` to fetch the root store and from there get the necessary store, or use `getParent` to traverse the tree. This however works fine for tightly coupled stores (like `PollDraft` and `PollDraftChoice`), won't scale if used in more decoupled stores.
+
+One way to enable store communication is to make use of `getEnv` function that can inject environment specific data when creating a state tree (from [mobx-state-tree docs](https://github.com/mobxjs/mobx-state-tree#dependency-injection)). So we can just inject a newly created store into the whole state tree. One caveat here is that the environment can't be passed directly into one of the child stores and needs to be passed into the root store, otherwise you get this error:
+
+```
+Error: [mobx-state-tree] A state tree cannot be made part of another state tree as long as their environments are different.
+```
+
+Let's create a function called `createStore`, similar to `redux`'s `configureStore`, that would create all individual stores, create the environment and assemble them all together in one root store. The environment will have only one property of `PublishedPolls` store since it needs to be accessed from `PollDraft` store when publishing a store
+
+```typescript
+type RootStoreEnv = {
+  publishedPolls: PublishedPollsModel
+}
+
+const createStore = (): RootStoreModel => {
+  const publishedPolls = PublishedPolls.create()
+  const pollDraft = PollDraft.create()
+
+  const env: RootStoreEnv = { publishedPolls }
+
+  return RootStore.create(
+    {
+      pollDraft,
+      publishedPolls
+    },
+    env
+  )
+}
+```
 
 ## Connect react to mobx
 
@@ -196,7 +225,7 @@ The most common way to achieve this is by using [mobx-react](https://github.com/
 My attempt to use this library failed miserably because:
 
 - when using `observer`, the component loses the ability to use hooks because it gets converted to a class, see this [github issue](https://github.com/mobxjs/mobx-react/issues/594) for more detail. And the docs recommend in the [best practices](https://mobx.js.org/best/pitfalls.html) to use `observer` around as many components as possible, which means hooks can't be used almost anywhere,
-- `inject` function is quite compilcated and doesn't play nicely with typescript (see [github issue](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)), requiring all stores be marked as optional and then using `!` to indicate that they actually do exist.
+- `inject` function is quite compilcated and doesn't play nicely with typescript (see [github issue](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)), requiring all stores to be marked as optional and then using `!` to indicate that they actually exist.
 
 Luckily there is another library, [`mobx-react-lite`](https://github.com/mobxjs/mobx-react-lite), which is built with hooks and provides `observer` wrapper. One thing worth mentioning, its `observer` doesn't support classes, but there is a dedicated component `Observer` that can be wrapped around components in render.
 
@@ -216,19 +245,43 @@ yarn add mobx-react-lite
 
 ### Use context provider to pass store(s)
 
-First, create a context in `StoreProvider.ts` exporting provider and a custom hook for accessing to the context value:
+First, let's create context `StoreContext`, that will later receive the root store as its `value`, and export provider and a custom hook for accessing the context value:
 
-```javascript
-import { useContext, createContext } from "react"
-import { RootStoreModel } from "./stores/RootStore"
-import { createStore } from "./stores/createStore"
-
-const rootStore = createStore()
-
-const StoreContext = createContext < RootStoreModel > rootStore
+```typescript
+const StoreContext = createContext<RootStoreModel>({} as RootStoreModel)
 
 export const useStore = () => useContext(StoreContext)
 export const StoreProvider = StoreContext.Provider
 ```
 
-### Create custom hook to inject stores]()
+And then create the root store with `createStore` and place it into `StoreProvider`:
+
+```JSX
+import { StoreProvider } from "./StoreProvider"
+import { createStore } from "./stores/createStore"
+
+const rootStore = createStore()
+
+const App: React.FunctionComponent<{}> = () => (
+  <StoreProvider value={rootStore}>
+    <div className="App">
+      <header className="App-header">Poll Maker</header>
+    </div>
+  </StoreProvider>
+)
+```
+
+### Create custom hook to inject stores
+
+In its simplest form, `useInject` hook might look like this:
+
+```typescript
+type MapStore<T> = (store: RootStoreModel) => T
+
+const defaultMapStore: MapStore<RootStoreModel> = store => store
+
+const useInject = <T>(mapStore?: MapStore<T>) => {
+  const store = useStore()
+  return (mapStore || defaultMapStore)(store)
+}
+```
