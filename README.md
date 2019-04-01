@@ -118,20 +118,12 @@ type PollDraftModel = Instance<typeof PollDraft>
 const PollDraftChoice = PollChoiceBase.actions(self => ({
   ...
   remove() {
-    // "2" passed inside getParent means "2 levels up" until you reach PollDraft
     const pollDraftParent = getParent<PollDraftModel>(self, 2)
-
-    // the type of "self" doesn't include actions and views so need to cast explicitly
     pollDraftParent.removeChoice(cast(self))
   }
 }))
 
-const PollDraft = types
-  .compose(PollBase,
-    types.model({
-      choices: types.optional(types.array(PollDraftChoice), [])
-    })
-  )
+const PollDraft = types.compose(...)
   .actions(self => ({
     ...
     addChoice(choice: string) {
@@ -153,6 +145,8 @@ Here is what is happening inside the choice model:
 Last thing, let's create our second domain store to keep track of published polls:
 
 ```typescript
+import { types, Instance, getSnapshot } from "mobx-state-tree"
+
 type PollDraftModel = Instance<typeof PollDraft>
 
 const PublishedPolls = types
@@ -161,12 +155,12 @@ const PublishedPolls = types
   })
   .actions(self => ({
     publishDraft(pollDraft: PollDraftModel) {
-      const pollToPublish = { ...pollDraft, id: shortid() }
+      const pollToPublish = { ...getSnapshot(pollDraft), id: shortid() }
       self.polls.push(pollToPublish)
     }))
 ```
 
-Here `publishDraft` accepts a draft poll to be published, generates an id with `shortid` library and adds the new poll to the list of polls.
+Here `publishDraft` accepts a draft poll to be published, generates an id with `shortid` library and adds the new poll to the list of polls. WHY getSnapshot?
 
 Next problem is that `publishDraft` action has to be called somewhere from outside, either from the `PollDraft` store or from some kind of `RootStore`. Let's see how we can make them communicate.
 
@@ -206,13 +200,7 @@ const createStore = (): RootStoreModel => {
 
   const env: RootStoreEnv = { publishedPolls }
 
-  return RootStore.create(
-    {
-      pollDraft,
-      publishedPolls
-    },
-    env
-  )
+  return RootStore.create({ pollDraft, publishedPolls }, env)
 }
 ```
 
@@ -220,20 +208,18 @@ const createStore = (): RootStoreModel => {
 
 The part I struggled most with is how to connect `react` to `mobx` and start using stores in my components. The idea here is that react components need to become "reactive" and start tracking observables from the stores.
 
-The most common way to achieve this is by using [mobx-react](https://github.com/mobxjs/mobx-react) which provides `observer` and `inject` functions. `observer` is wrapped around components which makes them react to changes and re-render. `inject` just injects stores into components.
+The most common way to achieve this is by using [mobx-react](https://github.com/mobxjs/mobx-react) which provides `observer` and `inject` functions, where `observer` is wrapped around components to make them react to changes and re-render and`inject` just injects stores into components. However, I wouldn't recommend using this library because:
 
-My attempt to use this library failed miserably because:
-
-- when using `observer`, the component loses the ability to use hooks because it gets converted to a class, see this [github issue](https://github.com/mobxjs/mobx-react/issues/594) for more detail. And the docs recommend in the [best practices](https://mobx.js.org/best/pitfalls.html) to use `observer` around as many components as possible, which means hooks can't be used almost anywhere,
-- `inject` function is quite compilcated and doesn't play nicely with typescript (see [github issue](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)), requiring all stores to be marked as optional and then using `!` to indicate that they actually exist.
+- when using `observer`, the component loses the ability to use hooks because it gets converted to a class, more explanation can be found [here](https://github.com/mobxjs/mobx-react/issues/594). And the docs recommend in the [best practices](https://mobx.js.org/best/pitfalls.html) to use `observer` around as many components as possible, which means hooks can't be used almost anywhere,
+- `inject` function is quite compilcated and doesn't work well with typescript (see [github issue](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)), requiring all stores to be marked as optional and then using `!` to indicate that they actually exist.
 
 Luckily there is another library, [`mobx-react-lite`](https://github.com/mobxjs/mobx-react-lite), which is built with hooks and provides `observer` wrapper. One thing worth mentioning, its `observer` doesn't support classes, but there is a dedicated component `Observer` that can be wrapped around components in render.
 
-But not so fast.. The library has a lot of built-in hooks like `useObservable`, `useComputed` etc. but they are going to be deprecated according to [this github issue](https://github.com/mobxjs/mobx-react-lite/issues/94). Instead here is a recommended way (more in this [github issue comment](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)):
+It is easy to get confused with this library since it provides a lot of hooks like `useObservable`, `useComputed` etc. that are going to be deprecated according to [the docs](https://github.com/mobxjs/mobx-react-lite#notice-of-deprecation). Instead here is a [recommended way](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)) that we are going to follow:
 
 - use `react context` provider to pass down the store(s),
 - access the store using `useContext` hook with a selector, alternatively inject the necessary stores with a custom `useInject` hook based on the `useContext` hook,
-- use `observer` from `mobx-react-lite` to subscribe to changes.
+- wrap components with `observer` from `mobx-react-lite` to subscribe to changes.
 
 As a bonus, I created a custom `connect` HOC function that resembles `redux`'s way of connecting to the store, which I will show later.
 
@@ -273,7 +259,13 @@ const App: React.FunctionComponent<{}> = () => (
 
 ### Create custom hook to inject stores
 
-In its simplest form, `useInject` hook might look like this:
+It is possible to use the `useStore` hook direclty to access the root store and get the necessary data from it, like this:
+
+```typescript
+const { pollDraft } = useInject(mapStore
+```
+
+I would however prefer having a `useInject` hook that would take in a mapping function and return the mapped object, similar to how it is done in `redux` with `mapStateToProps`. In its simplest form, `useInject` hook might look like this:
 
 ```typescript
 type MapStore<T> = (store: RootStoreModel) => T
@@ -284,4 +276,31 @@ const useInject = <T>(mapStore?: MapStore<T>) => {
   const store = useStore()
   return (mapStore || defaultMapStore)(store)
 }
+```
+
+The `PollDraft` component would then use `useInject` to access `pollDraft` store from the root store:
+
+```JSX
+import { observer } from "mobx-react-lite"
+import { RootStoreModel } from "../stores/RootStore"
+import useInject from "../hooks/useInject"
+
+const mapStore = ({ pollDraft }: RootStoreModel) => ({
+  pollDraft
+})
+
+const PollDraft: React.FunctionComponent<{}> = observer(() => {
+  const { pollDraft } = useInject(mapStore)
+
+  return (
+    <div>
+      <h1>Create a new poll</h1>
+      <input
+        value={pollDraft.question}
+        onChange={({ target }) => pollDraft.setQuestion(target.value)}
+      />
+      <button onClick={() => pollDraft.publish()}>Publish</button>
+    </div>
+  )
+})
 ```
