@@ -283,7 +283,7 @@ It is possible to use the `useStore` hook direclty to access the root store and 
 const { pollDraft } = useInject(mapStore
 ```
 
-I would however prefer having a `useInject` hook that would take in a mapping function and return the mapped object, similar to how it is done in `redux` with `mapStateToProps`. In its simplest form, `useInject` hook might look like this:
+I would however prefer having a `useInject` hook that takes in a mapping function and returns a mapped object, similar to how it is done in `redux` with `mapStateToProps`. In its simplest form, `useInject` hook might look like this:
 
 ```typescript
 type MapStore<T> = (store: RootStoreModel) => T
@@ -303,9 +303,7 @@ import { observer } from "mobx-react-lite"
 import { RootStoreModel } from "../stores/RootStore"
 import useInject from "../hooks/useInject"
 
-const mapStore = ({ pollDraft }: RootStoreModel) => ({
-  pollDraft
-})
+const mapStore = (rootStore: RootStoreModel) => ({ pollDraft: rootStore.pollDraft })
 
 const PollDraft: React.FunctionComponent<{}> = observer(() => {
   const { pollDraft } = useInject(mapStore)
@@ -323,4 +321,4 @@ const PollDraft: React.FunctionComponent<{}> = observer(() => {
 })
 ```
 
-This is especially useful when `mapStore` function is more compilcated and envolves combining data and actions from several stores.
+This is especially useful if `mapStore` function is more compilcated and envolves combining data and actions from several stores.
