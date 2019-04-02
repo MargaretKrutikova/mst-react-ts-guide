@@ -34,8 +34,8 @@ const PollDraft: React.FunctionComponent<{}> = observer(() => {
       <Typography variant="h3" as="div">
         Choices
       </Typography>
-      {pollDraft.choices.map((choice, index) => (
-        <PollDraftChoice choice={choice} key={index} />
+      {pollDraft.choices.map(choice => (
+        <PollDraftChoice choice={choice} key={choice.id} />
       ))}
 
       <Box display="flex" justifyContent="flex-end">

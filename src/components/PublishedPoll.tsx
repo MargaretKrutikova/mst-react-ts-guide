@@ -30,8 +30,8 @@ const PublishedPoll: React.FunctionComponent<Props> = ({ poll }) => {
         flexDirection="column"
         alignItems="flex-start"
       >
-        {poll.choices.map((choice, index) => (
-          <Typography key={index} variant="h5" as="li">
+        {poll.choices.map(choice => (
+          <Typography key={choice.id} variant="h5" as="li">
             ✔️
             <Box as="span" ml={10}>
               {choice.value}
