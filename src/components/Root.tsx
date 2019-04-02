@@ -1,7 +1,7 @@
 import * as React from "react"
 import { StoreProvider } from "./StoreProvider"
-import { createStore } from "./stores/createStore"
-import App from "./components/App"
+import { createStore } from "../stores/createStore"
+import App from "./App"
 
 const rootStore = createStore()
 
