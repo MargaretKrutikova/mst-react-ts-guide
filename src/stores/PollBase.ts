@@ -1,11 +1,11 @@
 import { types } from "mobx-state-tree"
 
 export const PollChoiceBase = types.model("PollChoiceBase", {
-  value: types.string
+  id: types.identifier,
+  value: types.optional(types.string, "")
 })
 
 export const PollBase = types.model("PollBase", {
   question: "",
-  isMultiChoice: false,
   choices: types.optional(types.array(PollChoiceBase), [])
 })

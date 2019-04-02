@@ -4,11 +4,14 @@ import {
   getParent,
   Instance,
   cast,
-  getEnv
+  getEnv,
+  getSnapshot,
+  SnapshotIn
 } from "mobx-state-tree"
 
 import { PollBase, PollChoiceBase } from "./PollBase"
 import { RootStoreEnv } from "./RootStore"
+import shortid from "shortid"
 
 // Instance is a typescript helper that extracts the type of the model
 export type PollDraftChoiceModel = Instance<typeof PollDraftChoice>
@@ -38,17 +41,23 @@ export const PollDraft = types
     setQuestion(question: string) {
       self.question = question
     },
-    setMultiChoice(isMultiChoice: boolean) {
-      self.isMultiChoice = isMultiChoice
-    },
     addChoice(choice: string) {
-      self.choices.push({ value: choice })
+      self.choices.push({ id: shortid(), value: choice })
     },
     removeChoice(choiceToRemove: PollDraftChoiceModel) {
       destroy(choiceToRemove)
     },
     publish() {
-      const env = getEnv<RootStoreEnv>(self)
-      env.publishedPolls.publishDraft(cast(self))
+      const { choices, question } = getSnapshot(self)
+      const nonEmptyChoices = choices.filter(choice => !!choice)
+
+      if (question && nonEmptyChoices.length > 0) {
+        const env = getEnv<RootStoreEnv>(self)
+        const pollToPublish: SnapshotIn<typeof PollDraft> = {
+          question,
+          choices: nonEmptyChoices
+        }
+        env.publishedPolls.publishDraft(pollToPublish)
+      }
     }
   }))

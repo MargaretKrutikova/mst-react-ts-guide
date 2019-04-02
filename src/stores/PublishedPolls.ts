@@ -4,13 +4,13 @@ import {
   destroy,
   getParent,
   cast,
-  getSnapshot
+  SnapshotIn
 } from "mobx-state-tree"
 import { PollBase } from "./PollBase"
 import { PollDraftModel } from "./PollDraft"
 import shortid from "shortid"
 
-type PublishedPollModel = Instance<typeof PublishedPoll>
+export type PublishedPollModel = Instance<typeof PublishedPoll>
 export type PublishedPollsModel = Instance<typeof PublishedPolls>
 
 const PublishedPoll = types
@@ -32,8 +32,8 @@ export const PublishedPolls = types
     polls: types.optional(types.array(PublishedPoll), [])
   })
   .actions(self => ({
-    publishDraft(pollDraft: PollDraftModel) {
-      const pollToPublish = { ...getSnapshot(pollDraft), id: shortid() }
+    publishDraft(pollDraft: SnapshotIn<PollDraftModel>) {
+      const pollToPublish = { ...pollDraft, id: shortid() }
       self.polls.push(pollToPublish)
     },
     removePoll(poll: PublishedPollModel) {
