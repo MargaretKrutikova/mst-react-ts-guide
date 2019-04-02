@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@smooth-ui/core-sc": "^10.0.3",
     "@types/jest": "24.0.11",
     "@types/node": "11.12.2",
     "@types/react": "16.8.10",
@@ -14,6 +15,7 @@
     "react-dom": "^16.8.6",
     "react-scripts": "2.1.8",
     "shortid": "^2.2.14",
+    "styled-components": "^4.2.0",
     "typescript": "3.4.1"
   },
   "scripts": {

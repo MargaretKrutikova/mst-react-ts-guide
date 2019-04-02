@@ -1,17 +1,14 @@
 import * as React from "react"
 import { StoreProvider } from "./StoreProvider"
 import { createStore } from "./stores/createStore"
-
-import "./App.css"
+import App from "./components/App"
 
 const rootStore = createStore()
 
-const App: React.FunctionComponent<{}> = () => (
+const Root: React.FunctionComponent<{}> = () => (
   <StoreProvider value={rootStore}>
-    <div className="App">
-      <header className="App-header">Poll Maker</header>
-    </div>
+    <App />
   </StoreProvider>
 )
 
-export default App
+export default Root
