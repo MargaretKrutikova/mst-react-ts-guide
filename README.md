@@ -43,31 +43,25 @@ Before we start, install the necessary dependencies:
 yarn add mobx mobx-state-tree
 ```
 
-Now we need to identify base properties of the domain object `poll`:
-
-- poll question,
-- whether it is multi choice poll,
-- a list of choices, where a choice is represented with just a string property.
-
-The code for the models:
+Now let's create a base model for the domain object `poll`, which will have a poll question and a list of choices, and a choice with a string property and id:
 
 ```typescript
 import { types } from "mobx-state-tree"
 
 const PollChoiceBase = types.model("PollChoiceBase", {
-  value: types.string
+  id: types.identifier,
+  value: types.optional(types.string, "")
 })
 
 const PollBase = types.model("PollBase", {
   question: "",
-  isMultiChoice: false,
   choices: types.optional(types.array(PollChoiceBase), [])
 })
 ```
 
 ### Use composition to create domain stores
 
-A poll that is being edited (let's call it a draft poll) and not yet published will have the same properties as `PollBase`, but also actions allowing to edit those properties. Similar, a choice of the draft poll will have the same shape as `PollChoiceBase` but also an action to update it:
+A poll that is being edited (let's call it a draft poll) and not yet published will have the same properties as `PollBase`, but also actions allowing to edit those properties. Similar, a choice of the draft poll will have the same shape as `PollChoiceBase` with an action to update it:
 
 ```typescript
 const PollDraftChoice = PollChoiceBase.actions(self => ({
@@ -84,14 +78,11 @@ const PollDraft = types
   .actions(self => ({
     setQuestion(question: string) {
       self.question = question
-    },
-    setMultiChoice(isMultiChoice: boolean) {
-      self.isMultiChoice = isMultiChoice
     }
 }))
 ```
 
-A published poll can no longer be edited, so it won't have editing actions but it needs an extra property `id` to be able to find it or link to it by its id:
+A published poll can no longer be edited, so it won't have editing actions but it needs an extra property `id` to be able to find it or create an external link to it by its id:
 
 ```typescript
 const PublishedPoll = types.compose(
@@ -104,11 +95,11 @@ const PublishedPoll = types.compose(
 
 ### CRUD on models in a nested list
 
-A draft poll has a list of choices of type `PollDraftChoice`, that can be added, read, edited and removed. Currently we have an action to update a choice (`setChoice`), but there are no actions to remove an existing choice or add a new one.
+A draft poll has a list of choices, that can be added, edited and removed. Currently we have an action to update a choice (`setChoice`), but there are no actions to remove an existing choice or add a new one.
 
-The tricky part here is removal. Since actions can only modify the model they belong to or their children, the `PollDraftChoice` model can't remove itself and can only be removed in its parent `PollDraft` since it "owns" the list of choices. This means `PollDraftChoice` model will need a `remove` action which will delegate its removal to `PollDraft` which is fetched via `getParent` helper from `mobx-state-tree`.
+Adding is rather trivial, but removal is a bit tricky. We want to be able to use `choice.remove()` somewhere in a `react` component. But actions can only modify the model they belong to or their children, so a choice can't simply remove itself and can only be removed in its parent `PollDraft` since it "owns" the list of choices. This means `PollDraftChoice` model will need a `remove` action which will delegate its removal to `PollDraft`, which is fetched via `getParent` helper from `mobx-state-tree`.
 
-Here is the code:
+Here is the code (using [shortid](https://github.com/dylang/shortid) to generate unique ids):
 
 ```typescript
 import { destroy, getParent, Instance, cast } from "mobx-state-tree"
@@ -129,7 +120,7 @@ const PollDraft = types.compose(...)
   .actions(self => ({
     ...
     addChoice(choice: string) {
-      self.choices.push({ value: choice })
+      self.choices.push({ id: shortid(), value: choice })
     },
     removeChoice(choiceToRemove: PollDraftChoiceModel) {
       destroy(choiceToRemove)
@@ -138,7 +129,7 @@ const PollDraft = types.compose(...)
 
 ```
 
-Here is what is happening inside the choice model:
+Here is what is happening inside `PollDraftChoice`:
 
 - `getParent<PollDraftModel>(self, 2)` means "2 levels up" - one until you reach `items` property and one more until you reach `PollDraft` itself, and the returned parent is going to be of type `PollDraftModel`.
 - `pollDraftParent.removeChoice(cast(self))` uses [`cast`](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/API/README.md#cast) helper to tell typescript that `self` is of the chocie instance type. The problem is that `self` here is of type what was [before views and actions are applied](https://github.com/mobxjs/mobx-state-tree#typing-self-in-actions-and-views), which means
@@ -149,26 +140,28 @@ Last thing, let's create our second domain store to keep track of published poll
 ```typescript
 import { types, Instance, getSnapshot } from "mobx-state-tree"
 
+type PublishedPollModel = Instance<typeof PublishedPoll>
 type PollDraftModel = Instance<typeof PollDraft>
 
-const PublishedPolls = types
+export const PublishedPolls = types
   .model({
     polls: types.optional(types.array(PublishedPoll), [])
   })
   .actions(self => ({
-    publishDraft(pollDraft: PollDraftModel) {
-      const pollToPublish = { ...getSnapshot(pollDraft), id: shortid() }
+    publishDraft(pollDraft: SnapshotIn<PollDraftModel>) {
+      const pollToPublish = { ...pollDraft, id: shortid() }
       self.polls.push(pollToPublish)
-    }))
+    }
+  }))
 ```
 
-Here `publishDraft` accepts a draft poll to be published, generates an id with `shortid` library and adds the new poll to the list of polls. WHY getSnapshot?
+Here `publishDraft` takes in a `snapshot` of a poll draft. [Snapshot](https://github.com/mobxjs/mobx-state-tree#snapshots) in `mobx-state-tree` is a plain object stripped from all type information and actions and can be automatically converted to models. So why does `publishDraft` need to take in a snapshot and not just `PollDraftModel`? That's because an instance of `PollDraftModel` can't be converted to a published poll since it will have extra actions that aren't compatible with `PublishedPollModel`, and will cause a runtime exception. So, by specifying `SnapshotIn<PollDraftModel>` we explicitly say that we want the raw data that exists on `PollDraftModel`.
 
-Next problem is that `publishDraft` action has to be called somewhere from outside, either from the `PollDraft` store or from some kind of `RootStore`. Let's see how we can make them communicate.
+Next problem is that `publishDraft` action has to be called somewhere from outside, either from the `PollDraft` store or from some kind of `RootStore`. Let's see how we can make that happen and establish some communication between the two stores.
 
 ### Root store
 
-Root store combines all the stores that are going to be used in the app: `PollDraft` and `PublishedPolls`:
+Let's create a root store to combine all stores used in the app: `PollDraft` and `PublishedPolls`:
 
 ```typescript
 type RootStoreModel = Instance<typeof RootStore>
@@ -204,6 +197,25 @@ const createStore = (): RootStoreModel => {
 
   return RootStore.create({ pollDraft, publishedPolls }, env)
 }
+```
+
+Now, `PolLDraft` store can define a `publish` actions and call `publishDraft` on `publishedPolls`:
+
+```typescript
+import { types, getEnv, getSnapshot } from "mobx-state-tree"
+
+const PollDraft = types
+  .compose(...)
+  .actions(self => ({
+    ...
+    publish() {
+      const snapshot = getSnapshot(self)
+
+      const env = getEnv<RootStoreEnv>(self)
+      env.publishedPolls.publishDraft(snapshot)
+    }
+  }))
+
 ```
 
 ## Connect react to mobx
@@ -310,3 +322,5 @@ const PollDraft: React.FunctionComponent<{}> = observer(() => {
   )
 })
 ```
+
+This is especially useful when `mapStore` function is more compilcated and envolves combining data and actions from several stores.
