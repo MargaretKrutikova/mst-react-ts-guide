@@ -34,7 +34,7 @@ export const PublishedPolls = types
   .actions(self => ({
     publishDraft(pollDraft: SnapshotIn<PollDraftModel>) {
       const pollToPublish = { ...pollDraft, id: shortid() }
-      self.polls.push(pollToPublish)
+      self.polls.unshift(pollToPublish)
     },
     removePoll(poll: PublishedPollModel) {
       destroy(poll)

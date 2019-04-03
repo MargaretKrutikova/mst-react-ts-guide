@@ -12,13 +12,14 @@ const App: React.FunctionComponent<{}> = () => (
         Poll Maker
       </Typography>
     </header>
+
     <Grid as="main" maxWidth={1100} px={{ xs: 10, md: 30 }} mx="auto" pt={40}>
       <Row>
-        <Col sm={12} md={5}>
+        <Col sm={12} md={5} lg={5}>
           <PollDraft />
         </Col>
-        <Col sm={0} md={2} />
-        <Col sm={12} md={5}>
+        <Col sm={0} md={1} lg={2} />
+        <Col sm={12} md={6} lg={5}>
           <PublishedPolls />
         </Col>
       </Row>

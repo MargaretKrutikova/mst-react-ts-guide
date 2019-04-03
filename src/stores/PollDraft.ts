@@ -58,6 +58,12 @@ export const PollDraft = types
           choices: nonEmptyChoices
         }
         env.publishedPolls.publishDraft(pollToPublish)
+        ;(self as PollDraftModel).clear()
       }
+    },
+    clear() {
+      self.question = ""
+      self.choices[0].setChoice("")
+      self.choices.splice(1)
     }
   }))
