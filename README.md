@@ -4,7 +4,9 @@ This is a walkthrough on how to get started with `mobx-state-tree` and connect i
 
 In the process of trying to learn `mobx-state-tree` and to use it in a `react` app written in `typescript` I felt that there were a few missing pieces that I had to struggle with. Eventually when everything fell in place I thought it would be useful to summarize and explain the steps I followed in order to make `mobx-state-tree` & `react` & `typescript` to play nicelly together.
 
-The application I build is a simple poll maker that allows to create a new poll, publish it, view and delete published polls.
+The application I build is a simple poll maker that allows to create a new poll, publish it, view and delete published polls. Here is a little demo:
+
+![](demo.gif)
 
 The guide assumes some familiarity with `mobx-state-tree` as it doesn't go through the theoretical part of the library but rather the practical example on how to make things work.
 
@@ -258,19 +260,17 @@ export const useStore = () => useContext(StoreContext)
 export const StoreProvider = StoreContext.Provider
 ```
 
-And then create the root store with `createStore` and place it into `StoreProvider`:
+And then create the root store with `createStore` and send it into `StoreProvider` which we wrap around `App`:
 
 ```JSX
 import { StoreProvider } from "./StoreProvider"
-import { createStore } from "./stores/createStore"
+import { createStore } from "../stores/createStore"
 
 const rootStore = createStore()
 
-const App: React.FunctionComponent<{}> = () => (
+const Root: React.FunctionComponent<{}> = () => (
   <StoreProvider value={rootStore}>
-    <div className="App">
-      <header className="App-header">Poll Maker</header>
-    </div>
+    <App />
   </StoreProvider>
 )
 ```
@@ -280,7 +280,7 @@ const App: React.FunctionComponent<{}> = () => (
 It is possible to use the `useStore` hook direclty to access the root store and get the necessary data from it, like this:
 
 ```typescript
-const { pollDraft } = useInject(mapStore
+const { pollDraft } = useStore()
 ```
 
 I would however prefer having a `useInject` hook that takes in a mapping function and returns a mapped object, similar to how it is done in `redux` with `mapStateToProps`. In its simplest form, `useInject` hook might look like this:
@@ -313,9 +313,9 @@ const PollDraft: React.FunctionComponent<{}> = observer(() => {
       <h1>Create a new poll</h1>
       <input
         value={pollDraft.question}
-        onChange={({ target }) => pollDraft.setQuestion(target.value)}
+        onChange={e => pollDraft.setQuestion(e.target.value)}
       />
-      <button onClick={() => pollDraft.publish()}>Publish</button>
+      <button onClick={pollDraft.publish}>Publish</button>
     </div>
   )
 })
