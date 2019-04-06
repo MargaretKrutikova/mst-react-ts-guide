@@ -18,7 +18,6 @@ The guide assumes some familiarity with `mobx-state-tree` as it doesn't go throu
   - [CRUD on models in a nested list](#crud-on-models-in-a-nested-list)
   - [Root store](#root-store)
   - [Communicate between stores](#communicate-between-stores)
-  - [Connect to redux devtools](#connect-to-redux-devtools)
 - [Connect react to mobx](#connect-react-to-mobx)
   - [Why not mobx-react](#why-not-mobx-react)
   - [mobx-react-lite to the rescue](#mobx-react-lite-to-the-rescue)
@@ -343,5 +342,3 @@ const PollDraft: React.FunctionComponent<{}> = observer(() => {
 ```
 
 This is especially useful if `mapStore` function is more compilcated and envolves combining data and actions from several stores.
-
-### Bonus: redux style connect
