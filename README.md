@@ -18,11 +18,13 @@ The guide assumes some familiarity with `mobx-state-tree` as it doesn't go throu
   - [CRUD on models in a nested list](#crud-on-models-in-a-nested-list)
   - [Root store](#root-store)
   - [Communicate between stores](#communicate-between-stores)
+  - [Connect to redux devtools](#connect-to-redux-devtools)
 - [Connect react to mobx](#connect-react-to-mobx)
   - [Why not mobx-react](#why-not-mobx-react)
   - [mobx-react-lite to the rescue](#mobx-react-lite-to-the-rescue)
   - [Context provider to pass store](#context-provider-to-pass-store)
   - [Custom hook to inject stores](#custom-hook-to-inject-stores)
+  - [Bonus: redux style connect](#bonus-redux-style-connect)
 
 ## Setup stores in mobx-state-tree
 
@@ -220,6 +222,25 @@ const PollDraft = types
 
 ```
 
+### Connect to redux devtools
+
+We will use `connectReduxDevtools` middleware from the package `mst-middlewares` that will connect the state tree to the redux devtools (more info and configuration options available in the [docs](https://github.com/mobxjs/mobx-state-tree/tree/master/packages/mst-middlewares#connectreduxdevtools)). In order to setup the connection we will use a monitoring tool [`remotedev`](https://github.com/zalmoxisus/remotedev). Install the packages first:
+
+```
+yarn add --dev remotedev mst-middlewares
+```
+
+and add the following code after the store creation:
+
+```
+import { createStore } from "../stores/createStore"
+import { connectReduxDevtools } from "mst-middlewares"
+
+const rootStore = createStore()
+
+connectReduxDevtools(require("remotedev"), rootStore)
+```
+
 ## Connect react to mobx
 
 The part I struggled most with is how to connect `react` to `mobx` and start using stores in my components. The idea here is that react components need to become "reactive" and start tracking observables from the stores.
@@ -322,3 +343,5 @@ const PollDraft: React.FunctionComponent<{}> = observer(() => {
 ```
 
 This is especially useful if `mapStore` function is more compilcated and envolves combining data and actions from several stores.
+
+### Bonus: redux style connect
