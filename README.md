@@ -4,7 +4,11 @@ This is a walkthrough on how to get started with `mobx-state-tree` and connect i
 
 The application I built is a simple poll maker that allows to create a new poll, publish it, view and delete published polls. Here is a little demo:
 
-![](demo.gif)
+<p align="center">
+<img src="demo.gif" width="600" height="100%" style="margin: 0 auto"/>
+</p>
+
+The full article is published on [dev.to](https://dev.to/margaretkrutikova/how-to-mobx-state-tree-react-typescript-3d5j).
 
 # Run locally
 
@@ -19,6 +23,7 @@ npm run start
   - [Create a base model](#create-a-base-model)
   - [Use composition to create domain stores](#use-composition-to-create-domain-stores)
   - [CRUD on models in a nested list](#crud-on-models-in-a-nested-list)
+  - [Convert between models](#convert-between-models)
   - [Root store](#root-store)
   - [Communicate between stores](#communicate-between-stores)
 - [Connect react to mobx](#connect-react-to-mobx)
@@ -26,20 +31,10 @@ npm run start
   - [mobx-react-lite to the rescue](#mobx-react-lite-to-the-rescue)
   - [Context provider to pass store](#context-provider-to-pass-store)
   - [Custom hook to inject stores](#custom-hook-to-inject-stores)
-  - [Bonus: redux style connect](#bonus-redux-style-connect)
 
 ## Setup stores in mobx-state-tree
 
-These are the steps I identified in the process of designing stores for the domain area of my app:
-
-- create a base model and use composition to extend it with properties and functionality in different stores,
-- create a store with a nested list of items representing another model and perform CRUD operations on it,
-- create a root store composing all the other domain stores,
-- communicate between stores.
-
-I figured those might be common problems faced when designing stores for any domain area, so I will go through the steps in more detail and show my solutions.
-
-In the poll maker app there is going to be a base model `PollBase`, a store responsible for creating a new poll `PollDraft`, a model for a published poll `PublishedPoll` and a store for published polls `PublishedPolls`.
+In my poll-maker app there is going to be a base model `PollBase`, a store responsible for creating a new poll `PollDraft`, a model for a published poll `PublishedPoll` and a store for published polls `PublishedPolls`.
 
 ### Create a base model
 
@@ -101,11 +96,9 @@ const PublishedPoll = types.compose(
 
 ### CRUD on models in a nested list
 
-A draft poll has a list of choices, that can be added, edited and removed. Currently we have an action to update a choice (`setChoice`), but there are no actions to remove an existing choice or add a new one.
+A draft poll has a list of choices, that can be added, edited and removed. Currently we have an action to update a choice (`setChoice`), but no actions to remove an existing choice or add a new one.
 
-Adding is rather trivial, but removal is a bit tricky. We want to be able to use `choice.remove()` somewhere in a `react` component. But actions can only modify the model they belong to or their children, so a choice can't simply remove itself and can only be removed in its parent `PollDraft` since it "owns" the list of choices. This means `PollDraftChoice` model will need a `remove` action which will delegate its removal to `PollDraft`, which is fetched via `getParent` helper from `mobx-state-tree`.
-
-Here is the code (using [shortid](https://github.com/dylang/shortid) to generate unique ids):
+Here is the code (I use [shortid](https://github.com/dylang/shortid) to generate unique ids):
 
 ```typescript
 import { destroy, getParent, Instance, cast } from "mobx-state-tree"
@@ -137,11 +130,12 @@ const PollDraft = types.compose(...)
 
 Here is what is happening inside `PollDraftChoice`:
 
-- `getParent<PollDraftModel>(self, 2)` means "2 levels up" - one until you reach `items` property and one more until you reach `PollDraft` itself, and the returned parent is going to be of type `PollDraftModel`.
-- `pollDraftParent.removeChoice(cast(self))` uses [`cast`](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/API/README.md#cast) helper to tell typescript that `self` is of the chocie instance type. The problem is that `self` here is of type what was [before views and actions are applied](https://github.com/mobxjs/mobx-state-tree#typing-self-in-actions-and-views), which means
-  it is actually not of type `PollDraftChoiceModel`, so `pollDraftParent.removeChoice(self)` won't compile in TS.
+- `getParent<PollDraftModel>(self, 2)` means fetch parent 2 levels up - one until you reach `items` property and one more until you reach `PollDraft` itself, and assume that the returned parent is of type `PollDraftModel`.
+- `pollDraftParent.removeChoice(cast(self))` uses [`cast`](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/API/README.md#cast) helper to tell typescript that `self` is indeed of type `PollDraftChoiceModel`. Why is it necessary? The problem is that `self` here is of type what was [before](https://github.com/mobxjs/mobx-state-tree#typing-self-in-actions-and-views) views and actions are applied, which means at that point `self` is actually not of type `PollDraftChoiceModel`, so `pollDraftParent.removeChoice(self)` won't compile in TS.
 
-Last thing, let's create our second domain store to keep track of published polls:
+### Convert between models
+
+Let's create our second domain store to keep track of published polls:
 
 ```typescript
 import { types, Instance, getSnapshot } from "mobx-state-tree"
@@ -161,9 +155,9 @@ export const PublishedPolls = types
   }))
 ```
 
-Here `publishDraft` takes in a `snapshot` of a poll draft. [Snapshot](https://github.com/mobxjs/mobx-state-tree#snapshots) in `mobx-state-tree` is a plain object stripped from all type information and actions and can be automatically converted to models. So why does `publishDraft` need to take in a snapshot and not just `PollDraftModel`? That's because an instance of `PollDraftModel` can't be converted to a published poll since it will have extra actions that aren't compatible with `PublishedPollModel`, and will cause a runtime exception. So, by specifying `SnapshotIn<PollDraftModel>` we explicitly say that we want the raw data that exists on `PollDraftModel`.
+Here `publishDraft` takes in a `snapshot` of a poll draft. [Snapshot](https://github.com/mobxjs/mobx-state-tree#snapshots) in `mobx-state-tree` is a plain object stripped from all type information and actions and can be automatically converted to models.
 
-Next problem is that `publishDraft` action has to be called somewhere from outside, either from the `PollDraft` store or from some kind of `RootStore`. Let's see how we can make that happen and establish some communication between the two stores.
+So why does `publishDraft` need to take in a snapshot and not just `PollDraftModel`? That's because an instance of `PollDraftModel` can't be converted to a published poll since it will have extra actions that aren't compatible with `PublishedPollModel`, and will cause a runtime exception. So, by specifying `SnapshotIn<PollDraftModel>` we explicitly say that we want the raw data that exists on `PollDraftModel`.
 
 ### Root store
 
@@ -180,15 +174,9 @@ const RootStore = types.model("RootStore", {
 
 ### Communicate between stores
 
-One way of communicating between stores, is to use `getRoot` to fetch the root store and from there get the necessary store, or use `getParent` to traverse the tree. This however works fine for tightly coupled stores (like `PollDraft` and `PollDraftChoice`), won't scale if used in more decoupled stores.
+One way to enable store communication is to make use of `getEnv` function that can inject environment specific data when creating a state tree (from [mobx-state-tree docs](https://github.com/mobxjs/mobx-state-tree#dependency-injection)). So we can just inject a newly created store into the whole state tree. One caveat here is that the environment can't be passed directly into one of the child stores and needs to be passed into the root store.
 
-One way to enable store communication is to make use of `getEnv` function that can inject environment specific data when creating a state tree (from [mobx-state-tree docs](https://github.com/mobxjs/mobx-state-tree#dependency-injection)). So we can just inject a newly created store into the whole state tree. One caveat here is that the environment can't be passed directly into one of the child stores and needs to be passed into the root store, otherwise you get this error:
-
-```
-Error: [mobx-state-tree] A state tree cannot be made part of another state tree as long as their environments are different.
-```
-
-Let's create a function called `createStore`, similar to `redux`'s `configureStore`, that would create all individual stores, create the environment and assemble them all together in one root store. The environment will have only one property of `PublishedPolls` store since it needs to be accessed from `PollDraft` store when publishing a store
+Here is the code:
 
 ```typescript
 type RootStoreEnv = {
@@ -205,7 +193,7 @@ const createStore = (): RootStoreModel => {
 }
 ```
 
-Now, `PolLDraft` store can define a `publish` actions and call `publishDraft` on `publishedPolls`:
+Now, `PolLDraft` store can define a `publish` action and call `publishDraft` on `publishedPolls`:
 
 ```typescript
 import { types, getEnv, getSnapshot } from "mobx-state-tree"
@@ -228,13 +216,13 @@ const PollDraft = types
 
 We will use `connectReduxDevtools` middleware from the package `mst-middlewares` that will connect the state tree to the redux devtools (more info and configuration options available in the [docs](https://github.com/mobxjs/mobx-state-tree/tree/master/packages/mst-middlewares#connectreduxdevtools)). In order to setup the connection we will use a monitoring tool [`remotedev`](https://github.com/zalmoxisus/remotedev). Install the packages first:
 
-```
+```shell
 yarn add --dev remotedev mst-middlewares
 ```
 
 and add the following code after the store creation:
 
-```
+```typescript
 import { createStore } from "../stores/createStore"
 import { connectReduxDevtools } from "mst-middlewares"
 
@@ -245,26 +233,22 @@ connectReduxDevtools(require("remotedev"), rootStore)
 
 ## Connect react to mobx
 
-The part I struggled most with is how to connect `react` to `mobx` and start using stores in my components. The idea here is that react components need to become "reactive" and start tracking observables from the stores.
-
 ### Why NOT mobx-react
 
-The most common way to achieve this is by using [mobx-react](https://github.com/mobxjs/mobx-react) which provides `observer` and `inject` functions, where `observer` is wrapped around components to make them react to changes and re-render and`inject` just injects stores into components. However, I wouldn't recommend using this library because:
+The most common way to connect `mobx` to `reaect` is by using [mobx-react](https://github.com/mobxjs/mobx-react) which provides `observer` and `inject` functions, where `observer` is wrapped around components to make them react to changes and re-render and `inject` just injects stores into components. However, I wouldn't recommend using this library because:
 
-- when using `observer`, the component loses the ability to use hooks because it gets converted to a class, more explanation can be found [here](https://github.com/mobxjs/mobx-react/issues/594). And the docs recommend in the [best practices](https://mobx.js.org/best/pitfalls.html) to use `observer` around as many components as possible, which means hooks can't be used almost anywhere,
+- when using `observer`, the component loses the ability to use hooks because it gets converted to a class, more on this [here](https://github.com/mobxjs/mobx-react/issues/594). And the docs recommend in the [best practices](https://mobx.js.org/best/pitfalls.html) to use `observer` around as many components as possible, which means hooks can't be used almost anywhere,
 - `inject` function is quite compilcated and doesn't work well with typescript (see [github issue](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230)), requiring all stores to be marked as optional and then using `!` to indicate that they actually exist.
 
 ### mobx-react-lite to the rescue
 
-Luckily there is another library, [`mobx-react-lite`](https://github.com/mobxjs/mobx-react-lite), which is built with hooks and provides `observer` wrapper. One thing worth mentioning, its `observer` doesn't support classes, but there is a dedicated component `Observer` that can be wrapped around components in render.
+Luckily there is another library, [`mobx-react-lite`](https://github.com/mobxjs/mobx-react-lite), which is built with hooks and provides `observer` wrapper. One thing worth mentioning, `observer` doesn't support classes, but there is a dedicated component `Observer` that can be wrapped around parts of `jsx` in render in class components.
 
-It is easy to get confused with this library since it provides a lot of hooks like `useObservable`, `useComputed` etc. that are going to be deprecated according to [the docs](https://github.com/mobxjs/mobx-react-lite#notice-of-deprecation). Instead here is a [recommended way](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230), that we are going to follow:
+The library provides a lot of hooks like `useObservable`, `useComputed` etc. that are going to be deprecated according to [the docs](https://github.com/mobxjs/mobx-react-lite#notice-of-deprecation). Instead here is a [recommended way](https://github.com/mobxjs/mobx-react/issues/256#issuecomment-433587230), that we are going to follow:
 
 - use `react context` provider to pass down the store(s),
 - access the store using `useContext` hook with a selector, alternatively inject the necessary stores with a custom `useInject` hook based on the `useContext` hook,
 - wrap components with `observer` from `mobx-react-lite` to subscribe to changes.
-
-As a bonus, I created a custom `connect` HOC function that resembles `redux`'s way of connecting to the store, which I will show later.
 
 First thing, install the library:
 
