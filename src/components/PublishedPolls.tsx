@@ -6,18 +6,18 @@ import { RootStoreModel } from "../stores/RootStore"
 import PublishedPoll from "./PublishedPoll"
 
 const mapStore = ({ publishedPolls }: RootStoreModel) => ({
-  publishedPolls
+  polls: publishedPolls.polls
 })
 
 const PublishedPolls: React.FunctionComponent<{}> = () => {
-  const { publishedPolls } = useInject(mapStore)
+  const { polls } = useInject(mapStore)
 
   return (
     <Box display="flex" flexDirection="column">
       <Typography as="div" variant="h2" mb={20}>
         Published polls
       </Typography>
-      {publishedPolls.polls.map(poll => (
+      {polls.map(poll => (
         <PublishedPoll poll={poll} key={poll.id} />
       ))}
     </Box>
