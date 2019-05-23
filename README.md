@@ -290,16 +290,14 @@ It is possible to use the `useStore` hook direclty to access the root store and 
 const { pollDraft } = useStore()
 ```
 
-I would however prefer having a `useInject` hook that takes in a mapping function and returns a mapped object, similar to how it is done in `redux` with `mapStateToProps`. In its simplest form, `useInject` hook might look like this:
+I also implemented a `useInject` hook that takes in a mapping function and returns a mapped object, similar to how it is done in `redux` with `mapStateToProps`. In its simplest form, `useInject` hook might look like this:
 
 ```typescript
 type MapStore<T> = (store: RootStoreModel) => T
 
-const defaultMapStore: MapStore<RootStoreModel> = store => store
-
-const useInject = <T>(mapStore?: MapStore<T>) => {
+const useInject = <T>(mapStore: MapStore<T>) => {
   const store = useStore()
-  return (mapStore || defaultMapStore)(store)
+  return mapStore(store)
 }
 ```
 
